@@ -59,7 +59,7 @@ CMemoryBitmap* BaseProvider::GetTileHttpData(CString url, CString shortUrl, bool
 {
     // single-file access to the tile load
     // MWGIS-207; allow multiple thread access
-    //CSingleLock lock(&_clientLock, TRUE);
+    CSingleLock lock(&_clientLock, TRUE);
 
     // stack-based instance
     SecureHttpClient client;
