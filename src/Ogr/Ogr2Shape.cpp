@@ -6,12 +6,13 @@
 #include "ShapefileHelper.h"
 #include "TableHelper.h"
 #include "Templates.h"
+#include <comdef.h>
 
 // *************************************************************
 //		Layer2Shapefile()
 // *************************************************************
 IShapefile* Ogr2Shape::Layer2Shapefile(OGRLayer* layer, ShpfileType activeShapeType, int maxFeatureCount, bool& isTrimmed, 
-	OgrDynamicLoader* loader, ICallback* callback /*= NULL*/)
+	OgrDynamicLoader* loader, ICallback* callback /*= NULL*/, bool addFeatureStyle)
 {
 	if (!layer)	
         return NULL;
@@ -19,7 +20,7 @@ IShapefile* Ogr2Shape::Layer2Shapefile(OGRLayer* layer, ShpfileType activeShapeT
 	IShapefile* sf = CreateShapefile(layer, activeShapeType);
 
 	if (sf) 
-		FillShapefile(layer, sf, maxFeatureCount, m_globalSettings.saveOgrLabels, callback, isTrimmed);
+		FillShapefile(layer, sf, maxFeatureCount, m_globalSettings.saveOgrLabels, callback, isTrimmed, addFeatureStyle);
 
 	return sf;
 }
@@ -153,7 +154,8 @@ void Ogr2Shape::CopyFields(OGRLayer* layer, IShapefile* sf)
 // *************************************************************
 //		ExtendShapefile()
 // *************************************************************
-bool Ogr2Shape::ExtendShapefile(OGRLayer* layer, IShapefile* sf, bool loadLabels, ICallback* callback)
+bool Ogr2Shape::ExtendShapefile(OGRLayer* layer, IShapefile* sf, bool loadLabels,
+	ICallback* callback, bool addFeatureStyle)
 {
     layer->ResetReading();
 
@@ -258,7 +260,7 @@ bool Ogr2Shape::ExtendShapefile(OGRLayer* layer, IShapefile* sf, bool loadLabels
 				((CShapefile*)sf)->MapOgrFid2ShapeIndex(fid_var.lVal, index);
         }
 
-        CopyValues(poFields, poFeature, sf, hasFID, index, loadLabels, labelFields);
+        CopyValues(poFields, poFeature, sf, hasFID, index, loadLabels, labelFields, addFeatureStyle);
 
     next_feature:
         OGRFeature::DestroyFeature(poFeature);
@@ -273,7 +275,8 @@ bool Ogr2Shape::ExtendShapefile(OGRLayer* layer, IShapefile* sf, bool loadLabels
 // *************************************************************
 //		FillShapefile()
 // *************************************************************
-bool Ogr2Shape::FillShapefile(OGRLayer* layer, IShapefile* sf, int maxFeatureCount, bool loadLabels, ICallback* callback, bool& isTrimmed)
+bool Ogr2Shape::FillShapefile(OGRLayer* layer, IShapefile* sf, int maxFeatureCount, 
+	bool loadLabels, ICallback* callback, bool& isTrimmed, bool addFeatureStyle)
 {
 	if (!sf || !layer) return false;
 
@@ -361,7 +364,7 @@ bool Ogr2Shape::FillShapefile(OGRLayer* layer, IShapefile* sf, int maxFeatureCou
             ((CShapefile*)sf)->MapOgrFid2ShapeIndex(var.lVal, numShapes);
 		}
 
-		CopyValues(poFields, poFeature, sf, hasFID, numShapes, loadLabels, labelFields);
+		CopyValues(poFields, poFeature, sf, hasFID, numShapes, loadLabels, labelFields, addFeatureStyle);
 
 next_feature:
 		OGRFeature::DestroyFeature(poFeature);
@@ -389,7 +392,7 @@ bool isXBaseLogicalTrue(wchar_t c)
 //		CopyValues()
 // *************************************************************
 void Ogr2Shape::CopyValues(OGRFeatureDefn* poFields, OGRFeature* poFeature, IShapefile* sf, bool hasFID, long numShapes, 
-	bool loadLabels, OgrLabelsHelper::LabelFields labelFields)
+	bool loadLabels, OgrLabelsHelper::LabelFields labelFields, bool addFeatureStyle)
 {
     if (!sf) return;
 
@@ -490,6 +493,25 @@ void Ogr2Shape::CopyValues(OGRFeatureDefn* poFields, OGRFeature* poFeature, ISha
 		sf->get_Labels(&labels);
 
 		labels->AddLabel(bstr, x, y, offsetX, offsetY, rotation);
+	}
+
+	if (addFeatureStyle)
+	{
+		BSTR categoryName = _bstr_t(poFeature->GetStyleString());
+
+		if (SysStringLen(categoryName)==0)
+			return;
+
+		IShapefileCategories* categories;
+		sf->get_Categories(&categories);
+		int index;
+		categories->get_CategoryIndexByName(categoryName, &index);
+		if (index == -1)
+		{
+			IShapefileCategory* cat = nullptr;
+			categories->Add(categoryName, &cat);
+		}
+		sf->put_ShapeCategory(numShapes, index);
 	}
 }
 
